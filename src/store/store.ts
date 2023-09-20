@@ -4,8 +4,12 @@ import {
   Action,
   combineReducers,
 } from "@reduxjs/toolkit";
+import rowsReducer from "./rowSlice";
 
-const rootReducer = combineReducers({});
+
+const rootReducer = combineReducers({
+  rowSlice: rowsReducer,
+});
 
 export const store = configureStore({
   reducer: rootReducer,
