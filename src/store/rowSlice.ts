@@ -13,7 +13,7 @@ export const rowSlice = createSlice({
   initialState,
   reducers: {
     setRows: (state, action) => {
-      state.rows = [...state.rows,...action.payload];
+      state.rows = [...state.rows, ...action.payload];
     },
   },
 });

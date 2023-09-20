@@ -6,7 +6,6 @@ import {
 } from "@reduxjs/toolkit";
 import rowsReducer from "./rowSlice";
 
-
 const rootReducer = combineReducers({
   rowSlice: rowsReducer,
 });
