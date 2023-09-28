@@ -5,15 +5,26 @@ import {
   GridCell,
   GridEditInputCell,
   GridTreeDataGroupingCell,
+  useGridApiContext,
   GridRenderCellParams,
   GridGroupingColDefOverride,
   GridToolbarQuickFilter,
+  GridGroupNode,
+  useGridRootProps,
+  DataGridProProps,
+  getDataGridUtilityClass,
 } from "@mui/x-data-grid-pro";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "./store/store";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { setRows } from "./store/rowSlice";
-import { Box, Button } from "@mui/material";
+import {
+  Box,
+  Button,
+  IconButton,
+  unstable_composeClasses,
+} from "@mui/material";
+import styled from "@emotion/styled";
 
 type Item = {
   name?: string | null;
@@ -30,12 +41,20 @@ type Item = {
   parentSiteKey?: string;
 };
 
+const StyledChevronWrapper = styled.div<{ depth: number }>`
+  margin-left: calc(${(p) => p.depth}rem);
+  cursor: grab;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+`;
+
 const App = () => {
+  const hierarchyLoading = useRef(true);
   const apiRef = useGridApiRef();
   const dispatch = useDispatch();
   const rowData = useSelector((state: RootState) => state.rowSlice.rows);
-
-  console.log("rows from redux", rowData);
 
   const columns: GridColDef[] = [
     {
@@ -79,6 +98,77 @@ const App = () => {
     return [...parentIds, parent.key];
   };
 
+  const useUtilityClasses = (ownerState: {
+    classes: DataGridProProps["classes"];
+  }) => {
+    const { classes } = ownerState;
+
+    const slots = {
+      root: ["treeDataGroupingCell"],
+      toggle: ["treeDataGroupingCellToggle"],
+    };
+
+    return unstable_composeClasses(slots, getDataGridUtilityClass, classes);
+  };
+
+  const GroupingCellWithLazyLoading = (props: any) => {
+    const { id, rowNode, row } = props;
+    const rootProps = useGridRootProps();
+    const apiRef = useGridApiContext();
+    const classes = useUtilityClasses({ classes: rootProps.classes });
+
+    const Icon: any = rowNode.childrenExpanded
+      ? rootProps.slots.treeDataCollapseIcon
+      : rootProps.slots.treeDataExpandIcon;
+
+    const handleClick = (key) => {
+      const newSubOrg = {
+        key: "6f131a7c-d5c7-4e66-04b2-08db10b71a12", // this is the key of of the existing child inside kalkitech org
+        parentOrganizationKey: key,
+        displayName: "New expanded", // kalkitech 7773 is the actual name of the object which will be updated when hierarchy data overrides
+        contactFirstName: "string",
+        contactLastName: "string",
+        contactPhone: "string",
+        contactEmail: "string",
+        contactJobTitle: "string",
+        serviceEmail: "string",
+      };
+      const currRows = apiRef.current.getRowModels().values();
+      console.log(Array.from(currRows), "Current rows after loading");
+      if (hierarchyLoading.current) {
+        apiRef.current.updateRows([newSubOrg]);
+      }
+      setTimeout(() => {
+        apiRef.current.setRowChildrenExpansion(key, !rowNode.childrenExpanded);
+      }, 4000);
+    };
+
+    return (
+      <StyledChevronWrapper depth={rowNode.depth}>
+        <Box className={classes.toggle}>
+          <IconButton
+            size="small"
+            data-testid={`chevron-icon-${row.key}`}
+            onClick={() => handleClick(row.key)}
+            tabIndex={-1}
+            aria-label={
+              rowNode?.childrenExpanded
+                ? apiRef.current.getLocaleText("treeDataCollapse")
+                : apiRef.current.getLocaleText("treeDataExpand")
+            }
+          >
+            <Icon fontSize="inherit" />
+          </IconButton>
+          {row.displayName ?? row.name}
+          {rowNode?.children ? `  (${rowNode?.children?.length})` : ""}
+        </Box>
+      </StyledChevronWrapper>
+    );
+  };
+
+  interface GroupingCellWithLazyLoadingProps
+    extends GridRenderCellParams<any, any, any, GridGroupNode> {}
+
   const GROUPING_COL_DEF: GridGroupingColDefOverride<Item> = {
     flex: 0.1,
     minWidth: 200,
@@ -88,6 +178,11 @@ const App = () => {
     valueGetter: (params) => {
       return params.row.displayName || params.row.name;
     },
+    renderCell: (params) => (
+      <GroupingCellWithLazyLoading
+        {...(params as GroupingCellWithLazyLoadingProps)}
+      />
+    ),
   };
 
   const QuickSearchToolbar = () => {
@@ -1238,8 +1333,36 @@ const App = () => {
       ],
     };
     const rows = flattenHierarchy(data);
-    dispatch(setRows(rows));
+
+    // trying to lazy load with only a single row provided initially
+    dispatch(setRows([rows[0]]));
+
+    // this case works fine all the data is provided before hand
+    //  dispatch(setRows(rows));
+
+    setTimeout(() => {
+      // using timeout to feed the rem. data
+      apiRef.current.updateRows(rows);
+
+      hierarchyLoading.current = false;
+    }, 8000);
   }, []);
+
+  const getTreeDataPath1: any = (row) => {
+    let rowPath;
+    const currRows = apiRef.current.getRowModels().values();
+    const currRowsArray = Array.from(currRows);
+    console.log(Array.from(currRows), "Current rows");
+
+    // this currRowsArray has to hold the entire table data for it be placed under the parent rows, Which is not happening at the moment
+    // the rows updated using apiRef.current does not show up currRowsArray. May be beacuse this is row confined step. It only gets you current row data.
+    rowPath = getTreeDataPath(currRowsArray, row);
+    console.log(rowPath);
+    return rowPath;
+  };
+
+  // const getTreeDataPath1: DataGridProProps["getTreeDataPath"] = (row) =>
+  //   getTreeDataPath(Array.from(apiRef.current.getRowModels().values()), row);
 
   return (
     <div>
@@ -1250,7 +1373,7 @@ const App = () => {
         groupingColDef={GROUPING_COL_DEF}
         treeData
         apiRef={apiRef}
-        getTreeDataPath={(row) => getTreeDataPath(rowData, row)}
+        getTreeDataPath={(row) => getTreeDataPath1(row)}
         getRowId={(row) => row.key}
         slots={{
           toolbar: QuickSearchToolbar,
