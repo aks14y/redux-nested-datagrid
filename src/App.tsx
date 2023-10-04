@@ -231,8 +231,81 @@ const App = () => {
     row.key,
   ];
 
+  function groupObjectsByParentKey(objects) {
+    // Create an object to store the hierarchy
+    const hierarchy = {};
+
+    // Iterate through the objects
+    objects.forEach((obj) => {
+      const key = obj.key;
+      const parentKey = obj.parentOrganizationKey || obj.siteKey;
+      obj.children = [];
+      // If the object has a parentKey
+      try {
+        if (parentKey) {
+          // Create a parent if it doesn't exist
+          if (!hierarchy[parentKey]) {
+            console.log("SDSD");
+            hierarchy[parentKey] = {
+              children: [],
+            };
+          }
+
+          // Add the object to its parent's children
+          hierarchy[parentKey].children.push(obj);
+        } else {
+          // If it doesn't have a parentKey, add it directly to the hierarchy
+          hierarchy[key] = obj;
+          console.log(hierarchy);
+        }
+      } catch (error) {
+        console.log(error, obj, hierarchy);
+      }
+    });
+
+    // Convert the hierarchy object back to an array
+    const groupedObjects = Object.values(hierarchy);
+
+    return groupedObjects;
+  }
+
+  function topologicalSort(objects) {
+    const visited = {};
+    const result = [];
+
+    function visit(obj) {
+      const key = obj.key;
+
+      if (!visited[key]) {
+        visited[key] = true;
+
+        // Check both parent keys
+        const parentKey = obj.parentOrganizationKey || obj.siteKey;
+
+        if (parentKey) {
+          const parentObj = objects.find((o) => o.key === parentKey);
+          if (parentObj) {
+            visit(parentObj);
+          }
+        }
+
+        result.push(obj);
+      }
+    }
+
+    objects.forEach((obj) => {
+      visit(obj);
+    });
+
+    return result;
+  }
+
   const flattenHierarchy = (hierarchy: Object) => {
-    return Object.values(hierarchy).flat();
+    // Usage
+    const items = Object.values(hierarchy).flat();
+    console.log(items);
+    const groupedData = topologicalSort(items);
+    return groupedData;
   };
 
   useEffect(() => {
@@ -1346,6 +1419,8 @@ const App = () => {
 
       hierarchyLoading.current = false;
     }, 8000);
+
+    // hierarchyLoading.current = false;
   }, []);
 
   const getTreeDataPath1: any = (row) => {
