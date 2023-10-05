@@ -52,6 +52,7 @@ const StyledChevronWrapper = styled.div<{ depth: number }>`
 
 const App = () => {
   const hierarchyLoading = useRef(true);
+  const allData = useRef([]);
   const apiRef = useGridApiRef();
   const dispatch = useDispatch();
   const rowData = useSelector((state: RootState) => state.rowSlice.rows);
@@ -134,33 +135,50 @@ const App = () => {
         serviceEmail: "string",
       };
       const currRows = apiRef.current.getRowModels().values();
-      console.log(Array.from(currRows), "Current rows after loading");
+      // console.log(Array.from(currRows), "Current rows after loading");
       if (hierarchyLoading.current) {
-        apiRef.current.updateRows([newSubOrg]);
+        setTimeout(() => {
+          let apiResponseData = [newSubOrg];
+          // Check for duplicate data in allData.current
+          allData.current.push(apiResponseData[0]);
+          apiRef.current.updateRows(apiResponseData);
+          if (apiResponseData.length > 0) {
+            apiRef.current.setRowChildrenExpansion(
+              key,
+              !rowNode.childrenExpanded
+            );
+          }
+        }, 4000);
+      } else {
+        if (rowNode?.children) {
+          apiRef.current.setRowChildrenExpansion(
+            key,
+            !rowNode.childrenExpanded
+          );
+        }
       }
-      setTimeout(() => {
-        apiRef.current.setRowChildrenExpansion(key, !rowNode.childrenExpanded);
-      }, 4000);
     };
 
     return (
       <StyledChevronWrapper depth={rowNode.depth}>
         <Box className={classes.toggle}>
-          <IconButton
-            size="small"
-            data-testid={`chevron-icon-${row.key}`}
-            onClick={() => handleClick(row.key)}
-            tabIndex={-1}
-            aria-label={
-              rowNode?.childrenExpanded
-                ? apiRef.current.getLocaleText("treeDataCollapse")
-                : apiRef.current.getLocaleText("treeDataExpand")
-            }
-          >
-            <Icon fontSize="inherit" />
-          </IconButton>
+          {hierarchyLoading.current || rowNode?.children ? (
+            <IconButton
+              size="small"
+              data-testid={`chevron-icon-${row.key}`}
+              onClick={() => handleClick(row.key)}
+              tabIndex={-1}
+              aria-label={
+                rowNode?.childrenExpanded
+                  ? apiRef.current.getLocaleText("treeDataCollapse")
+                  : apiRef.current.getLocaleText("treeDataExpand")
+              }
+            >
+              <Icon fontSize="inherit" />
+            </IconButton>
+          ) : null}
           {row.displayName ?? row.name}
-          {rowNode?.children ? `  (${rowNode?.children?.length})` : ""}
+          {/* {rowNode?.children ? `  (${rowNode?.children?.length})` : ""} */}
         </Box>
       </StyledChevronWrapper>
     );
@@ -216,6 +234,7 @@ const App = () => {
     // updating store causes table re render
     // dispatch(setRows([newSubOrg]));
     // apiRef is only way to update treedata datgrid without causing a table re render, check this thread https://github.com/mui/mui-x/issues/7771#issuecomment-1411818662
+    allData.current.push(newSubOrg);
     apiRef.current.updateRows([newSubOrg]);
   };
 
@@ -264,9 +283,7 @@ const App = () => {
     });
 
     // Convert the hierarchy object back to an array
-    const groupedObjects = Object.values(hierarchy);
-
-    return groupedObjects;
+    return Object.values(hierarchy);
   }
 
   function topologicalSort(objects) {
@@ -274,7 +291,7 @@ const App = () => {
     const result = [];
 
     function visit(obj) {
-      const key = obj.key;
+      const { key } = obj;
 
       if (!visited[key]) {
         visited[key] = true;
@@ -300,12 +317,117 @@ const App = () => {
     return result;
   }
 
+  function customSort(items) {
+    // console.log("items", items);
+    // items.sort((a, b) => {
+    //   const aKeyMatches =
+    //     // matches if any item's parentOrgKey or parentSiteKey matches with the current item's key
+    //     items.some(
+    //       (item) =>
+    //         item.parentOrganizationKey === a.key || item.parentSiteKey === a.key
+    //     );
+    //   const bKeyMatches =
+    //     // matches if any item's parentOrgKey or parentSiteKey matches with the current item's key
+    //     items.some(
+    //       (item) =>
+    //         item.parentOrganizationKey === b.key || item.parentSiteKey === b.key
+    //     );
+
+    //   if (aKeyMatches && bKeyMatches) {
+    //     return 0; // Both a and b match, so they are equal.
+    //   } else if (aKeyMatches) {
+    //     return -1; // Only a matches, so a comes first.
+    //   } else if (bKeyMatches) {
+    //     return 1; // Only b matches, so b comes first.
+    //   } else {
+    //     return 0; // Neither a nor b matches, so they are equal.
+    //   }
+    // });
+
+    // console.log("sorted items", items);
+    // return items;
+
+    // let parentArray = [];
+    // items.forEach((element) => {
+    //   // check if element is in parent array
+    //   if (parentArray.includes(element)) {
+    //     console.log("element is in parent array");
+    //   } else if (
+    //     element.parentOrganizationKey in parentArray ||
+    //     element.parentSiteKey in parentArray
+    //   ) {
+    //     console.log("element's parent is in parent array");
+    //     parentArray.push(element);
+    //   } else {
+    //     let parent = items.find(
+    //       (item) =>
+    //         item.key === element.parentOrganizationKey ||
+    //         item.key === element.parentSiteKey
+    //     );
+    //     console.log("parent", parent);
+    //     if (parent) {
+    //       if (parentArray.includes(parent)) {
+    //         console.log("parent is in parent array");
+    //       } else {
+    //         console.log("element's parent is not in parent array");
+    //         parentArray.push(parent);
+    //       }
+    //       parentArray.push(element);
+    //     } else {
+    //       console.log(
+    //         "parent is not in items, so not pushing parent or element"
+    //       );
+    //     }
+    //   }
+    // });
+    // console.log("parent array", parentArray);
+    // return parentArray;
+
+    const parentMap = new Map();
+
+    items.forEach((element) => {
+      if (parentMap.has(element.key)) {
+        console.log("element is in parent array");
+      } else if (
+        parentMap.has(element.parentOrganizationKey) ||
+        parentMap.has(element.parentSiteKey)
+      ) {
+        console.log("element's parent is in parent array");
+        parentMap.set(element.key, element);
+      } else {
+        const parent = items.find(
+          (item) =>
+            item.key === element.parentOrganizationKey ||
+            item.key === element.parentSiteKey
+        );
+        console.log("parent", parent);
+        if (parent) {
+          if (parentMap.has(parent.key)) {
+            console.log("parent is in parent array");
+          } else {
+            console.log("element's parent is not in parent array");
+            parentMap.set(parent.key, parent);
+          }
+          parentMap.set(element.key, element);
+        } else {
+          console.log(
+            "parent is not in items, so not pushing parent or element"
+          );
+        }
+      }
+    });
+
+    const parentArray = Array.from(parentMap.values());
+    console.log("parent array", parentArray);
+    return parentArray;
+  }
+
   const flattenHierarchy = (hierarchy: Object) => {
     // Usage
     const items = Object.values(hierarchy).flat();
     console.log(items);
-    const groupedData = topologicalSort(items);
-    return groupedData;
+    return customSort(items);
+    // return topologicalSort(items);
   };
 
   useEffect(() => {
@@ -1409,12 +1531,16 @@ const App = () => {
 
     // trying to lazy load with only a single row provided initially
     dispatch(setRows([rows[0]]));
+    allData.current = [rows[0]];
 
     // this case works fine all the data is provided before hand
-    //  dispatch(setRows(rows));
+    // dispatch(setRows(rows));
 
     setTimeout(() => {
       // using timeout to feed the rem. data
+
+      // dispatch(setRows(rows));
+      allData.current = rows;
       apiRef.current.updateRows(rows);
 
       hierarchyLoading.current = false;
@@ -1425,14 +1551,14 @@ const App = () => {
 
   const getTreeDataPath1: any = (row) => {
     let rowPath;
-    const currRows = apiRef.current.getRowModels().values();
-    const currRowsArray = Array.from(currRows);
-    console.log(Array.from(currRows), "Current rows");
+    // const currRows = apiRef.current.getRowModels().values();
+    // const currRowsArray = Array.from(currRows);
+    // console.log(Array.from(currRows), "Current rows");
 
     // this currRowsArray has to hold the entire table data for it be placed under the parent rows, Which is not happening at the moment
     // the rows updated using apiRef.current does not show up currRowsArray. May be beacuse this is row confined step. It only gets you current row data.
-    rowPath = getTreeDataPath(currRowsArray, row);
-    console.log(rowPath);
+    // rowPath = getTreeDataPath(currRowsArray, row);
+    rowPath = getTreeDataPath(allData.current, row);
     return rowPath;
   };
 
